@@ -1,0 +1,108 @@
+#!/bin/bash
+
+# Check if running with root privileges
+if [ "$(id -u)" != "0" ]; then
+    echo "This script must be run as root" >&2
+    exit 1
+fi
+
+# Check if Docker is installed
+if ! command -v docker &> /dev/null; then
+    read -p "Docker not found, Do you want to install it? (Y/n): " install_docker
+    if [[ $install_docker == "Y" || $install_docker == "y" ]]; then
+        echo "Installing Docker..."
+        sudo apt install docker.io
+    else
+        echo "Docker installation skipped. Exiting..."
+        exit 1
+    fi
+fi
+
+# Check if DVWA is installed
+check_dvwa_installed() {
+    if docker image inspect vulnerables/web-dvwa &> /dev/null; then
+        return 0  # DVWA image exists
+    else
+        read -p "DVWA not found, Do you want to install it? (Y/n): " install_dvwa
+        if [[ $install_dvwa == "Y" || $install_dvwa == "y" ]]; then
+            echo "Installing and running DVWA..."
+            docker pull vulnerables/web-dvwa
+        else
+            echo "DVWA installation skipped. Exiting..."
+            exit 1
+        fi
+    fi
+}
+
+# Check if BWAPP is installed
+check_bwapp_installed() {
+    if docker image inspect raesene/bwapp &> /dev/null; then
+        return 0
+    else
+        read -p "BWAPP not found, Do you want to install it? (Y/n): " install_bwapp
+        if [[ $install_bwapp == "Y" || $install_bwapp == "y" ]]; then
+            echo "Installing and running BWAPP..."
+            docker pull raesene/bwapp
+        else
+            echo "BWAPP installation skipped. Exiting..."
+            exit 1
+        fi
+    fi
+}
+
+start_dvwa() {
+    echo "Starting DVWA..."
+    docker run --rm -it -p 80:80 vulnerables/web-dvwa
+}
+
+start_bwapp() {
+    echo "Starting BWAPP..."
+    docker run -d -p 80:80 raesene/bwapp
+}
+
+stop_bwapp() {
+    echo "Stopping BWAPP..."
+    docker stop $(docker ps -q --filter ancestor=raesene/bwapp)
+}
+
+# Main menu
+echo "       .            .  .       .   .  
+.  ,. .|._  _ ._. _.|_ | _     | _.|_ 
+ \/ (_||[ )(/,[  (_][_)|(/,____|(_][_)
+"
+echo "Select an option:"
+echo "1. Start DVWA"
+echo "2. Start BWAPP"
+echo "0. Exit"
+
+while true; do
+    read -p "Enter your choice: " choice
+    case $choice in
+        1)
+            if check_dvwa_installed; then
+                start_dvwa
+                exit 0
+            fi
+            ;;
+        2)
+            if check_bwapp_installed; then
+                start_bwapp
+                echo "Success run at http://172.17.0.1"
+                read -p "Do you want to stop? (Y/n)" r_bwapp
+                if [[ $r_bwapp == "Y" || $r_bwapp == "y" ]]; then
+                    stop_bwapp
+                    exit 0
+                elif [[ $r_bwapp == "N" || $r_bwapp == "n" ]]; then
+                    exit 0
+                fi
+            fi
+            ;;
+        0)
+            echo "Exiting..."
+            exit 0
+            ;;
+        *)
+            echo "Invalid choice, please try again!"
+            ;;
+    esac
+done
